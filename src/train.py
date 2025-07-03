@@ -37,6 +37,8 @@ import os
 # Чтобы импортировать подготовленную функцию - обработчик данных
 from utils import load_and_clean_data
 
+text_line = "================================================================"
+
 def train_model(train_path: str) -> None:
     """
     :param train_path: это путь к данным, на которых будет обучаться модель
@@ -64,13 +66,55 @@ def train_model(train_path: str) -> None:
     )
 
     # Векторизуем поданный на вход текст
-    vactorized_X = vectorizer.fit_transform(X)
+    # мы не можем векторизовать все данные сразу, так как будет утечка данных, модель "увидит" результаты. Такая ситуация называется Data Leakage
+    # vectorized_X = vectorizer.fit_transform(X)
 
-    # Выводим первые 30 векторов
-    print(vectorizer.get_feature_names_out()[:30])
+    # Выводим первые 10 векторизованных слов
+    #print(vectorizer.get_feature_names_out()[:10])
 
-    #Отладочная печать в консоль
-    #print(X.head())
+    # Разделяем данные на обучающую и тестовую выборку
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
+        stratify=y,
+        random_state=42
+    )
+
+    X_train_vect = vectorizer.fit_transform(X_train)
+    X_test_vect = vectorizer.transform(X_test)
+
+    # Обучаем модель на наших данных
+    model = LogisticRegression().fit(X_train_vect, y_train)
+    print(text_line, "\nМодель успешно обучена на тренировочных данных.")
+
+    # Делаем предсказание на тестовых данных
+    y_pred = model.predict(X_test_vect)
+    print(f"{text_line}\nПредсказание успешно выполнено.")
+
+    # Выводим метрики качества предсказаний
+    print(f"{text_line}\nAccuracy:", accuracy_score(y_test, y_pred))
+    print("F1 Score:", f1_score(y_test, y_pred))
+    print(f"{text_line}\nClassification Report:\n", classification_report(y_test, y_pred))
+    print(f"{text_line}\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+    # Сохранение модели и векторайзера
+    models_dir = os.path.join(os.path.dirname(__file__), "..", "models")
+    os.makedirs(models_dir, exist_ok=True)
+
+    joblib.dump(model, os.path.join(models_dir, "model.pkl"))
+    joblib.dump(vectorizer, os.path.join(models_dir, "vectorizer.pkl"))
+
+    print(f"{text_line}\nДанные успешно сохранены.")
+
+    # Выводим топ 10 СПАМ-признаков
+    words = vectorizer.get_feature_names_out()
+    weights = model.coef_[0]
+
+    top = sorted(zip(weights, words), reverse=True)[:10]
+    print(f"{text_line}\n🔝 Топ-10 признаков, указывающих на СПАМ:")
+    for w, word in top:
+        print(f"{word}: {w:.3f}")
+    print(text_line)
 
     return
 
