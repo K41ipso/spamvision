@@ -1,7 +1,19 @@
 import tkinter as tk
+from copy import deepcopy
 from tkinter import messagebox
 import joblib
 import os
+from langdetect import detect
+from googletrans import Translator
+import logging
+
+
+# Добавляем логгер для вывода информации
+logging.basicConfig(
+    level=logging.INFO,  # уровень логирования: INFO, DEBUG, WARNING, ERROR
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Класс наследуется от tk.Tk для того, чтобы создать главное окно приложения
 class SpamDetectionApp(tk.Tk):
@@ -18,6 +30,9 @@ class SpamDetectionApp(tk.Tk):
         # Загружаем модель для предсказания и векторизатор
         self.model = joblib.load(model_path)
         self.vectorizer = joblib.load(vectorizer_path)
+
+        # Создаем экземпляр переводчика
+        self.translator = Translator()
 
         # Задаем заголовок окна
         self.title("Spam Detector")
@@ -85,27 +100,64 @@ class SpamDetectionApp(tk.Tk):
         self.text_input.event_generate("<<Cut>>")
         return "break"
 
-    def on_check(self):
-        # Забираем вставленный текст в поле для ввода
-        text = self.text_input.get("1.0", tk.END).strip()
-        # Отладочный вывод в консоль
-        print(text)
-        if text:
-            # ЛОГИКА АНАЛИЗА ТЕКСТА
-            vec_text_x = self.vectorizer.transform([text])
-            is_spam = self.model.predict(vec_text_x)[0]
-            # логика вывода сообщения
-            if is_spam:
-                result = "Это спам!"
-                fg = "#b00020"
-            else:
-                result = "Не спам"
-                fg = "#00695c"
-            # Изменяем окно в зависимости от результата работы модели
-            self.result_label.config(text=result, fg=fg)
+    def get_input_text(self) -> str:
+        return self.text_input.get("1.0", tk.END).strip()
+
+    def show_empty_input_warning(self) -> None:
+        # Если сообщение не введено
+        self.result_label.config(text="Введите сообщение для анализа.")
+
+    def translate_to_english(self, input_text: str) -> str:
+        logger.info(f"Введенный текст: {input_text}")
+        try:
+            languages_text = detect(input_text)
+        except Exception as e:
+            logger.warning("Не удалось определить язык текста. Используется 'en' по умолчанию.")
+            languages_text = "en"
+        logger.info(f"Данный текст на {languages_text} языке.")
+        # Проверяем язык введенного текста
+        if languages_text != "en":
+            # Если язык не английский, то пытаемся его перевести на английский
+            try:
+                result_translate = self.translator.translate(
+                    text=input_text,
+                    src=languages_text,
+                    dest='en'
+                )
+                output_text = result_translate.text
+            except Exception as e:
+                logger.error("Произошла неожиданная ошибка, текст остается необработанным.")
+                output_text = input_text
+            logger.info(f"Переведенный текст: {output_text}")
         else:
-            # Если сообщение не введено
-            self.result_label.config(text="Введите сообщение для анализа.")
+            output_text = input_text
+        return output_text
+
+    def classify_text(self, translated_text: str) -> int:
+        vec_text_x = self.vectorizer.transform([translated_text])
+        is_spam = self.model.predict(vec_text_x)[0]
+        return is_spam
+
+    def update_result_label(self, is_spam: int) -> None:
+        # логика вывода сообщения
+        if is_spam:
+            result = "Это спам!"
+            fg = "#b00020"
+        else:
+            result = "Не спам"
+            fg = "#00695c"
+        # Изменяем окно в зависимости от результата работы модели
+        self.result_label.config(text=result, fg=fg)
+
+    def on_check(self) -> None:
+        input_text = self.get_input_text()
+        if not input_text:
+            self.show_empty_input_warning()
+            return
+
+        translated_text = self.translate_to_english(input_text)
+        is_spam = self.classify_text(translated_text)
+        self.update_result_label(is_spam)
 
 # Отладочный вызов с запуском приложения
 if __name__ == "__main__":

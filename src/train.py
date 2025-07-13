@@ -27,8 +27,10 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 # Для разделения
 from sklearn.model_selection import train_test_split
-# Для модели
+# Модели
 from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.svm import LinearSVC
 # Для метрик
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 # Для сохранения
@@ -39,8 +41,10 @@ from utils import load_and_clean_data
 
 text_line = "================================================================"
 
-def train_model(train_path: str) -> None:
+def train_model(train_path: str, sk_model, model_name: str) -> None:
     """
+    :param model_name: Наименование модели для предсказания
+    :param sk_model: Импортируемый объект - модель
     :param train_path: это путь к данным, на которых будет обучаться модель
     :return: функция сохраняет результат обработки в model.pkl (LogReg) и vectorizer.pkl (TF-IDF)
     а также печатает метрики (в консоль)
@@ -59,10 +63,10 @@ def train_model(train_path: str) -> None:
     # TF-IDF векторизация X
     vectorizer = TfidfVectorizer(
         lowercase=True,         # преобразует все X к строчному формату
-        stop_words='english',   # использует вшитый словарь предлогов и междометий на английском языке
-        ngram_range=(1, 2),     # создаем матрицу как для соло слов, так и для биграмм (словосочетаний из 2х слов)
-        min_df=1,               # default - (измеряется в шт.) исключает слова, которые встречаются меньше чем в 1 документе
-        max_df=1.0              # default - (измеряется в %) исключает слова, которые встречаются более чем в 100% документов
+        #stop_words='english',  # использует вшитый словарь предлогов и междометий на английском языке
+        ngram_range=(1, 3),     # создаем матрицу как для соло слов, так и для биграмм (словосочетаний из 2х слов)
+        min_df=2,               # default - (измеряется в шт.) исключает слова, которые встречаются меньше чем в 1 документе
+        max_df=0.9              # default - (измеряется в %) исключает слова, которые встречаются более чем в 100% документов
     )
 
     # Векторизуем поданный на вход текст
@@ -84,8 +88,8 @@ def train_model(train_path: str) -> None:
     X_test_vect = vectorizer.transform(X_test)
 
     # Обучаем модель на наших данных
-    model = LogisticRegression().fit(X_train_vect, y_train)
-    print(text_line, "\nМодель успешно обучена на тренировочных данных.")
+    model = sk_model.fit(X_train_vect, y_train)
+    print(text_line, f"\nМодель {model_name} успешно обучена на тренировочных данных.")
 
     # Делаем предсказание на тестовых данных
     y_pred = model.predict(X_test_vect)
@@ -131,7 +135,10 @@ if __name__ == "__main__":
         current_dir = os.path.dirname(os.path.abspath(__file__))
         # Строим путь к файлу
         current_path = os.path.join(current_dir, "..", "data", "raw", "spam.csv")
-        train_model(train_path=current_path)
+        #train_model(train_path=current_path, sk_model=LogisticRegression(), model_name="LogisticRegression")
+        #train_model(train_path=current_path, sk_model=MultinomialNB(), model_name="MultinomialNB")
+        # Данная модель показала себя самой продуктивной в рамках основных метрик
+        train_model(train_path=current_path, sk_model=LinearSVC(), model_name="LinearSVC")
         print("✅ Данные успешно загружены и обработаны!")
     except Exception as e:
         print(f"❌ Произошла ошибка: {e}")
